@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solana Arb Bot Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg:#080c10;--surface:#0d1218;--surface2:#111820;--surface3:#161f28;
+    --border:rgba(0,255,136,0.12);--border2:rgba(0,255,136,0.06);
+    --green:#00ff88;--green-dim:rgba(0,255,136,0.15);--green-glow:rgba(0,255,136,0.08);
+    --amber:#f5a623;--red:#ff4757;--blue:#4ecdc4;
+    --text:#e8f0e9;--text-dim:#5a7a65;--text-mid:#8aab90;
+    --mono:'JetBrains Mono',monospace;--sans:'Space Grotesk',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,136,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+  .container{max-width:1280px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+  header{border-bottom:1px solid var(--border2);padding:16px 0;background:rgba(8,12,16,.9);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100}
+  .header-inner{display:flex;align-items:center;justify-content:space-between}
+  .logo{display:flex;align-items:center;gap:12px}
+  .logo-icon{width:36px;height:36px;background:var(--green-dim);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+  .logo-text{font-size:15px;font-weight:600;letter-spacing:.5px}
+  .logo-sub{font-size:11px;color:var(--text-dim);font-family:var(--mono)}
+  .header-right{display:flex;align-items:center;gap:16px}
+  .sol-price{font-family:var(--mono);font-size:13px;color:var(--text-mid)}
+  .sol-price span{color:var(--green);font-weight:600}
+  .status-pill{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:100px;padding:6px 14px;font-size:12px;font-family:var(--mono);color:var(--green)}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:24px 0 0}
+  .stat-card{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden}
+  .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--green),transparent);opacity:.5}
+  .stat-card.accent{border-color:rgba(0,255,136,.25)}
+  .stat-label{font-size:11px;font-family:var(--mono);color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+  .stat-value{font-size:26px;font-weight:600;font-family:var(--mono);color:var(--text);line-height:1;margin-bottom:6px}
+  .stat-value.green{color:var(--green)}.stat-value.blue{color:var(--blue)}
+  .stat-delta{font-size:11px;font-family:var(--mono);color:var(--text-dim)}
+  .stat-delta.up{color:var(--green)}
+  .main-grid{display:grid;grid-template-columns:1fr 360px;gap:16px;padding:16px 0}
+  .col-left{display:flex;flex-direction:column;gap:16px}
+  .col-right{display:flex;flex-direction:column;gap:16px}
+  .panel{background:var(--surface);border:1px solid var(--border2);border-radius:12px;overflow:hidden}
+  .panel-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border2)}
+  .panel-title{font-size:12px;font-family:var(--mono);color:var(--text-mid);text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:8px}
+  .panel-title-dot{width:5px;height:5px;border-radius:50%;background:var(--green)}
+  .panel-body{padding:18px}
+  .chart-wrap{position:relative;height:200px}
+  .trade-item{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:12px;padding:10px 18px;border-bottom:1px solid var(--border2);font-size:12px;font-family:var(--mono)}
+  .trade-item:last-child{border-bottom:none}
+  .trade-item:hover{background:var(--green-glow)}
+  .trade-badge{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+  .trade-badge.success{background:var(--green);box-shadow:0 0 6px var(--green)}
+  .trade-badge.fail{background:var(--red)}
+  .trade-pair{color:var(--text);font-weight:500}
+  .trade-route{color:var(--text-dim);font-size:10px}
+  .trade-profit{text-align:right}
+  .trade-profit.pos{color:var(--green)}.trade-profit.neg{color:var(--red)}.trade-profit.neutral{color:var(--amber)}
+  .trade-time{color:var(--text-dim);font-size:10px;text-align:right}
+  .wallet-addr{font-family:var(--mono);font-size:11px;color:var(--text-dim);background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:8px 12px;margin-bottom:14px;word-break:break-all}
+  .wallet-stat{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2)}
+  .wallet-stat:last-child{border-bottom:none}
+  .wallet-key{font-size:11px;font-family:var(--mono);color:var(--text-dim)}
+  .wallet-val{font-size:12px;font-family:var(--mono);color:var(--text);font-weight:500}
+  .loading{display:inline-block;width:10px;height:10px;border:2px solid var(--text-dim);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .empty-state{padding:32px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--text-dim)}
+  .explorer-link{color:var(--green);text-decoration:none;font-size:10px}
+  .explorer-link:hover{text-decoration:underline}
+  .refresh-btn{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-dim);font-family:var(--mono);font-size:10px;padding:4px 10px;cursor:pointer;transition:all .15s}
+  .refresh-btn:hover{color:var(--green)}
+  footer{border-top:1px solid var(--border2);padding:12px 0;font-family:var(--mono);font-size:10px;color:var(--text-dim);display:flex;justify-content:space-between;position:relative;z-index:1}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">◆</div>
+        <div>
+          <div class="logo-text">SOLANA ARB BOT</div>
+          <div class="logo-sub">cross-dex arbitrage engine v1.0</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="sol-price">SOL/USD <span id="solPrice">loading...</span></div>
+        <div class="status-pill"><div class="status-dot"></div><span>LIVE</span></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="stats-grid">
+    <div class="stat-card accent">
+      <div class="stat-label">wallet balance</div>
+      <div class="stat-value green" id="walletSOL"><span class="loading"></span></div>
+      <div class="stat-delta up" id="walletUSD">fetching from chain...</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">usd value</div>
+      <div class="stat-value" id="walletUSDCard"><span class="loading"></span></div>
+      <div class="stat-delta" id="lastRefresh">auto-refresh every 30s</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">sol price</div>
+      <div class="stat-value blue" id="solPriceCard"><span class="loading"></span></div>
+      <div class="stat-delta">jupiter price api</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">transactions</div>
+      <div class="stat-value" id="totalTx"><span class="loading"></span></div>
+      <div class="stat-delta">on-chain history</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="col-left">
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title"><div class="panel-title-dot"></div>balance history</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">sampled every 30s</div>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap"><canvas id="balChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title"><div class="panel-title-dot"></div>on-chain transactions</div>
+          <button class="refresh-btn" onclick="loadTransactions()">↻ refresh</button>
+        </div>
+        <div id="txFeed"><div class="empty-state"><span class="loading"></span>&nbsp; loading from chain...</div></div>
+      </div>
+
+    </div>
+
+    <div class="col-right">
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title"><div class="panel-title-dot"></div>wallet</div>
+          <a class="explorer-link" href="https://solscan.io/account/DUyAnt9FVguy8sRQbRuNSW1tuToJfcqWq5sgwYRBtdF6" target="_blank">solscan ↗</a>
+        </div>
+        <div class="panel-body">
+          <div class="wallet-addr">DUyAnt9FVguy8sRQbRuNSW1tuToJfcqWq5sgwYRBtdF6</div>
+          <div class="wallet-stat"><span class="wallet-key">sol balance</span><span class="wallet-val" id="wSol"><span class="loading"></span></span></div>
+          <div class="wallet-stat"><span class="wallet-key">usd value</span><span class="wallet-val" id="wUsd"><span class="loading"></span></span></div>
+          <div class="wallet-stat"><span class="wallet-key">sol price</span><span class="wallet-val" id="wPrice"><span class="loading"></span></span></div>
+          <div class="wallet-stat"><span class="wallet-key">total txns</span><span class="wallet-val" id="wTxCount"><span class="loading"></span></span></div>
+          <div class="wallet-stat"><span class="wallet-key">last activity</span><span class="wallet-val" id="wLastActivity">--</span></div>
+          <div class="wallet-stat"><span class="wallet-key">network</span><span class="wallet-val" style="color:var(--green)">● mainnet</span></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title"><div class="panel-title-dot"></div>config</div></div>
+        <div class="panel-body">
+          <div class="wallet-stat"><span class="wallet-key">max trade</span><span class="wallet-val">0.1 SOL</span></div>
+          <div class="wallet-stat"><span class="wallet-key">min profit</span><span class="wallet-val">$0.25</span></div>
+          <div class="wallet-stat"><span class="wallet-key">slippage</span><span class="wallet-val">50 bps</span></div>
+          <div class="wallet-stat"><span class="wallet-key">scan interval</span><span class="wallet-val">500ms</span></div>
+          <div class="wallet-stat"><span class="wallet-key">pairs monitored</span><span class="wallet-val">12</span></div>
+          <div class="wallet-stat"><span class="wallet-key">rpc</span><span class="wallet-val" style="color:var(--green)">● helius</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <footer>
+    <span>live data · helius rpc + jupiter price api · auto-refreshes every 30s</span>
+    <span id="footerTime">--:--:-- UTC</span>
+  </footer>
+</div>
+
+<script>
+const WALLET     = "DUyAnt9FVguy8sRQbRuNSW1tuToJfcqWq5sgwYRBtdF6";
+const HELIUS_KEY = "a6bfa486-c536-4c4e-aaa9-f7cb8cdd4852";
+const RPC        = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
+const HELIUS_API = `https://api.helius.xyz/v0`;
+const SOL_MINT   = "So11111111111111111111111111111111111111112";
+const USDC_MINT  = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+let solPrice = 0, walletSOL = 0, balHistory = [];
+
+// Chart
+const balChart = new Chart(document.getElementById('balChart').getContext('2d'), {
+  type: 'line',
+  data: { labels: [], datasets: [{ label: 'SOL Balance', data: [], borderColor: '#00ff88', borderWidth: 1.5, pointRadius: 2, pointBackgroundColor: '#00ff88', fill: true, backgroundColor: 'rgba(0,255,136,0.05)', tension: 0.4 }] },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#5a7a65', font: { family: 'JetBrains Mono', size: 9 }, maxTicksLimit: 8 }, grid: { color: 'rgba(0,255,136,0.04)' }, border: { color: 'rgba(0,255,136,0.1)' } },
+      y: { ticks: { color: '#5a7a65', font: { family: 'JetBrains Mono', size: 9 }, callback: v => v.toFixed(3)+' SOL' }, grid: { color: 'rgba(0,255,136,0.04)' }, border: { color: 'rgba(0,255,136,0.1)' } }
+    }
+  }
+});
+
+async function rpc(method, params) {
+  const r = await fetch(RPC, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({jsonrpc:'2.0',id:1,method,params}) });
+  return (await r.json()).result;
+}
+
+async function fetchPrice() {
+  try {
+    const r = await fetch(`https://price.jup.ag/v6/price?ids=${SOL_MINT}&vsToken=${USDC_MINT}`);
+    const d = await r.json();
+    solPrice = d?.data?.[SOL_MINT]?.price ?? 0;
+    const p = '$' + solPrice.toFixed(2);
+    document.getElementById('solPrice').textContent = p;
+    document.getElementById('solPriceCard').textContent = p;
+    document.getElementById('wPrice').textContent = p;
+    updateUSD();
+  } catch(e) { document.getElementById('solPrice').textContent = 'error'; }
+}
+
+async function fetchBalance() {
+  try {
+    const r = await rpc('getBalance', [WALLET, {commitment:'confirmed'}]);
+    walletSOL = r.value / 1e9;
+    const s = walletSOL.toFixed(4) + ' SOL';
+    document.getElementById('walletSOL').textContent = s;
+    document.getElementById('wSol').textContent = s;
+    document.getElementById('lastRefresh').textContent = '↻ ' + new Date().toLocaleTimeString();
+    updateUSD();
+    const t = new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    balHistory.push({time:t,sol:walletSOL});
+    if(balHistory.length>40) balHistory.shift();
+    balChart.data.labels = balHistory.map(b=>b.time);
+    balChart.data.datasets[0].data = balHistory.map(b=>+b.sol.toFixed(6));
+    balChart.update('none');
+  } catch(e) { document.getElementById('walletSOL').textContent = 'RPC error'; }
+}
+
+function updateUSD() {
+  if(!solPrice||!walletSOL) return;
+  const u = '$' + (walletSOL*solPrice).toFixed(2);
+  document.getElementById('walletUSD').textContent = u + ' USD';
+  document.getElementById('walletUSDCard').textContent = u;
+  document.getElementById('wUsd').textContent = u;
+}
+
+async function loadTransactions() {
+  document.getElementById('txFeed').innerHTML = '<div class="empty-state"><span class="loading"></span>&nbsp; loading from chain...</div>';
+  try {
+    // Try Helius enhanced API first
+    const r = await fetch(`${HELIUS_API}/addresses/${WALLET}/transactions?api-key=${HELIUS_KEY}&limit=20`);
+    const txns = await r.json();
+    if (!Array.isArray(txns) || txns.length === 0) throw new Error('empty');
+
+    document.getElementById('totalTx').textContent = txns.length + '+';
+    document.getElementById('wTxCount').textContent = txns.length + '+ transactions';
+    if (txns[0]?.timestamp) document.getElementById('wLastActivity').textContent = new Date(txns[0].timestamp*1000).toLocaleString();
+
+    document.getElementById('txFeed').innerHTML = txns.map(tx => {
+      const ok = tx.transactionError === null;
+      const time = tx.timestamp ? new Date(tx.timestamp*1000).toLocaleTimeString() : '--';
+      const date = tx.timestamp ? new Date(tx.timestamp*1000).toLocaleDateString() : '--';
+      const sig  = tx.signature ? tx.signature.slice(0,8)+'...'+tx.signature.slice(-6) : '--';
+      const type = (tx.type||'UNKNOWN').replace(/_/g,' ');
+      let change = '';
+      if (tx.nativeTransfers) {
+        const net = tx.nativeTransfers.reduce((s,t) => {
+          if(t.toUserAccount===WALLET) return s+t.amount;
+          if(t.fromUserAccount===WALLET) return s-t.amount;
+          return s;
+        },0);
+        if(net!==0) change = (net>0?'+':'') + (net/1e9).toFixed(4)+' SOL';
+      }
+      return `<div class="trade-item">
+        <div class="trade-badge ${ok?'success':'fail'}"></div>
+        <div>
+          <div class="trade-pair"><a href="https://solscan.io/tx/${tx.signature}" target="_blank" class="explorer-link">${sig}</a> <span style="color:var(--text-dim);font-size:10px">${type}</span></div>
+          <div class="trade-route">${(tx.description||'').slice(0,55)||'on-chain transaction'}</div>
+        </div>
+        <div class="trade-profit ${change.startsWith('+')?'pos':change.startsWith('-')?'neg':'neutral'}">${change||(ok?'✓':'✗')}</div>
+        <div class="trade-time">${time}<br>${date}</div>
+      </div>`;
+    }).join('');
+
+  } catch(e) {
+    // Fallback to raw signatures
+    try {
+      const sigs = await rpc('getSignaturesForAddress',[WALLET,{limit:20,commitment:'confirmed'}]);
+      if(!sigs||sigs.length===0) {
+        document.getElementById('txFeed').innerHTML = '<div class="empty-state">No transactions yet.<br><br>Fund the wallet to see real activity here.<br><br><a href="https://solscan.io/account/'+WALLET+'" target="_blank" class="explorer-link">View on Solscan ↗</a></div>';
+        document.getElementById('totalTx').textContent = '0';
+        document.getElementById('wTxCount').textContent = '0 transactions';
+        return;
+      }
+      document.getElementById('totalTx').textContent = sigs.length+'+';
+      document.getElementById('wTxCount').textContent = sigs.length+'+ transactions';
+      if(sigs[0]?.blockTime) document.getElementById('wLastActivity').textContent = new Date(sigs[0].blockTime*1000).toLocaleString();
+
+      document.getElementById('txFeed').innerHTML = sigs.map(s => {
+        const ok = !s.err;
+        const time = s.blockTime ? new Date(s.blockTime*1000).toLocaleTimeString() : '--';
+        const date = s.blockTime ? new Date(s.blockTime*1000).toLocaleDateString() : '--';
+        const sig  = s.signature.slice(0,8)+'...'+s.signature.slice(-6);
+        return `<div class="trade-item">
+          <div class="trade-badge ${ok?'success':'fail'}"></div>
+          <div>
+            <div class="trade-pair"><a href="https://solscan.io/tx/${s.signature}" target="_blank" class="explorer-link">${sig}</a></div>
+            <div class="trade-route">${ok?'confirmed':'failed'} · slot ${(s.slot||0).toLocaleString()}</div>
+          </div>
+          <div class="trade-profit ${ok?'pos':'neg'}">${ok?'✓':'✗'}</div>
+          <div class="trade-time">${time}<br>${date}</div>
+        </div>`;
+      }).join('');
+    } catch(e2) {
+      document.getElementById('txFeed').innerHTML = '<div class="empty-state">Could not load transactions.<br>Check RPC connection.</div>';
+    }
+  }
+}
+
+setInterval(()=>{ document.getElementById('footerTime').textContent = new Date().toUTCString().slice(17,25)+' UTC'; }, 1000);
+
+// Init
+(async()=>{ await fetchPrice(); await fetchBalance(); await loadTransactions(); })();
+setInterval(async()=>{ await fetchPrice(); await fetchBalance(); }, 30000);
+setInterval(loadTransactions, 60000);
+</script>
+</body>
+</html>
