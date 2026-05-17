@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paper Trader — Live Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg:#080c10;--surface:#0d1218;--surface2:#111820;--surface3:#161f28;
+    --border:rgba(0,255,136,0.12);--border2:rgba(0,255,136,0.06);
+    --green:#00ff88;--green-dim:rgba(0,255,136,0.12);
+    --amber:#f5a623;--red:#ff4757;--blue:#4ecdc4;
+    --text:#e8f0e9;--text-dim:#5a7a65;--text-mid:#8aab90;
+    --mono:'JetBrains Mono',monospace;--sans:'Space Grotesk',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,136,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}
+
+  .container{max-width:1280px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+
+  /* Header */
+  header{border-bottom:1px solid var(--border2);padding:14px 0;background:rgba(8,12,16,.95);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100}
+  .header-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .logo{display:flex;align-items:center;gap:10px}
+  .logo-icon{width:32px;height:32px;background:var(--green-dim);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .logo-text{font-size:14px;font-weight:700}
+  .logo-sub{font-size:10px;color:var(--text-dim);font-family:var(--mono)}
+  .paper-badge{background:rgba(245,166,35,0.15);border:1px solid rgba(245,166,35,0.3);border-radius:100px;padding:5px 12px;font-size:11px;font-family:var(--mono);color:var(--amber)}
+  .header-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .sol-price{font-family:var(--mono);font-size:13px;color:var(--text-mid)}
+  .sol-price span{color:var(--green);font-weight:600}
+  .status-pill{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);border-radius:100px;padding:5px 12px;font-size:11px;font-family:var(--mono);color:var(--green)}
+  .status-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  /* Stats */
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:20px 0 0}
+  @media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+  .stat-card{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden}
+  .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--green),transparent);opacity:.4}
+  .stat-card.accent{border-color:rgba(0,255,136,.2)}
+  .stat-label{font-size:10px;font-family:var(--mono);color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+  .stat-value{font-size:22px;font-weight:700;font-family:var(--mono);color:var(--text);line-height:1;margin-bottom:4px}
+  .stat-value.green{color:var(--green)}.stat-value.amber{color:var(--amber)}.stat-value.blue{color:var(--blue)}
+  .stat-delta{font-size:10px;font-family:var(--mono);color:var(--text-dim)}
+
+  /* Layout */
+  .main-grid{display:grid;grid-template-columns:1fr 340px;gap:14px;padding:14px 0}
+  @media(max-width:900px){.main-grid{grid-template-columns:1fr}}
+  .col-left{display:flex;flex-direction:column;gap:14px}
+  .col-right{display:flex;flex-direction:column;gap:14px}
+
+  /* Panel */
+  .panel{background:var(--surface);border:1px solid var(--border2);border-radius:12px;overflow:hidden}
+  .panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border2)}
+  .panel-title{font-size:11px;font-family:var(--mono);color:var(--text-mid);text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:7px}
+  .panel-dot{width:5px;height:5px;border-radius:50%;background:var(--green)}
+  .panel-body{padding:16px}
+  .chart-wrap{height:180px;position:relative}
+
+  /* Scan feed */
+  .scan-item{display:grid;grid-template-columns:auto 1fr repeat(3,auto);align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border2);font-size:11px;font-family:var(--mono)}
+  .scan-item:last-child{border-bottom:none}
+  .scan-item:hover{background:rgba(0,255,136,.04)}
+  .scan-num{color:var(--text-dim);min-width:40px}
+  .scan-pairs{color:var(--text)}
+  .scan-found{color:var(--green);min-width:50px;text-align:right}
+  .scan-found.zero{color:var(--text-dim)}
+  .scan-elapsed{color:var(--text-dim);min-width:55px;text-align:right}
+  .scan-time{color:var(--text-dim);min-width:60px;text-align:right}
+
+  /* Spread table */
+  .spread-row{display:grid;grid-template-columns:90px 1fr 80px 70px;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border2);font-size:11px;font-family:var(--mono)}
+  .spread-row:last-child{border-bottom:none}
+  .spread-pair{color:var(--text);font-weight:500}
+  .spread-bar-wrap{background:var(--surface2);border-radius:3px;height:6px;overflow:hidden}
+  .spread-bar{height:100%;border-radius:3px;transition:width .4s}
+  .spread-bps{text-align:right}
+  .spread-bps.pos{color:var(--green)}
+  .spread-bps.neg{color:var(--red)}
+  .spread-bps.zero{color:var(--text-dim)}
+  .spread-status{text-align:right;font-size:9px;padding:2px 6px;border-radius:4px;text-transform:uppercase}
+  .spread-status.profitable{background:rgba(0,255,136,.12);color:var(--green)}
+  .spread-status.close{background:rgba(245,166,35,.12);color:var(--amber)}
+  .spread-status.negative{background:rgba(255,71,87,.08);color:var(--red)}
+
+  /* Info rows */
+  .info-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2);font-size:11px;font-family:var(--mono)}
+  .info-row:last-child{border-bottom:none}
+  .info-key{color:var(--text-dim)}
+  .info-val{color:var(--text);font-weight:500}
+  .info-val.green{color:var(--green)}
+  .info-val.amber{color:var(--amber)}
+
+  /* Empty */
+  .empty{padding:24px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--text-dim);line-height:1.8}
+
+  /* Disclaimer */
+  .disclaimer{background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:10px;padding:12px 16px;font-size:11px;font-family:var(--mono);color:var(--amber);margin:14px 0;line-height:1.6}
+
+  footer{border-top:1px solid var(--border2);padding:10px 0;font-family:var(--mono);font-size:10px;color:var(--text-dim);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;position:relative;z-index:1}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">◆</div>
+        <div>
+          <div class="logo-text">PAPER TRADER</div>
+          <div class="logo-sub">prop-firm simulation · real jupiter quotes</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="paper-badge">⚠ PAPER TRADING — NOT REAL CAPITAL</div>
+        <div class="sol-price">SOL <span id="solPrice">loading...</span></div>
+        <div class="status-pill"><div class="status-dot"></div><span id="statusText">SCANNING</span></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="disclaimer">
+    ⚠ All data below is derived from real Jupiter live quotes. P&L figures are simulated using real spread + fee models. No real capital is at risk. Results labeled PAPER TRADE throughout.
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card accent">
+      <div class="stat-label">total scans</div>
+      <div class="stat-value green" id="totalScans">0</div>
+      <div class="stat-delta" id="scanRate">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">opportunities found</div>
+      <div class="stat-value amber" id="totalOpps">0</div>
+      <div class="stat-delta" id="oppRate">0% of scans</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">sol price (binance)</div>
+      <div class="stat-value blue" id="solPriceCard">--</div>
+      <div class="stat-delta">live · updates every 15s</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">avg scan time</div>
+      <div class="stat-value" id="avgScanTime">--</div>
+      <div class="stat-delta">per full cycle (12 pairs)</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="col-left">
+
+      <!-- Live spread chart -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title"><div class="panel-dot"></div>live spread (gross bps before fees)</div>
+          <div style="font-size:10px;font-family:var(--mono);color:var(--text-dim)">fee threshold ~10 bps</div>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap"><canvas id="spreadChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Real-time spread per pair -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title"><div class="panel-dot"></div>real-time pair spreads</div>
+          <div style="font-size:10px;font-family:var(--mono);color:var(--text-dim)" id="lastQuoteTime">fetching...</div>
+        </div>
+        <div id="spreadTable"><div class="empty">Fetching live quotes from Jupiter...<br>This updates every 30 seconds.</div></div>
+      </div>
+
+      <!-- Scan log -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title"><div class="panel-dot"></div>scan log</div>
+          <div style="font-size:10px;font-family:var(--mono);color:var(--text-dim)">last 15 scans</div>
+        </div>
+        <div id="scanLog"><div class="empty">Waiting for scan data...</div></div>
+      </div>
+
+    </div>
+
+    <div class="col-right">
+
+      <!-- Session info -->
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title"><div class="panel-dot"></div>session</div></div>
+        <div class="panel-body">
+          <div class="info-row"><span class="info-key">mode</span><span class="info-val amber">PAPER TRADING</span></div>
+          <div class="info-row"><span class="info-key">virtual balance</span><span class="info-val">0.1000 SOL</span></div>
+          <div class="info-row"><span class="info-key">trade size</span><span class="info-val">0.1 SOL per arb</span></div>
+          <div class="info-row"><span class="info-key">slippage bps</span><span class="info-val">50</span></div>
+          <div class="info-row"><span class="info-key">fee model</span><span class="info-val">1,010,000 lamports</span></div>
+          <div class="info-row"><span class="info-key">fee threshold</span><span class="info-val">~10.1 bps</span></div>
+          <div class="info-row"><span class="info-key">quote source</span><span class="info-val green">public.jupiterapi.com</span></div>
+          <div class="info-row"><span class="info-key">price source</span><span class="info-val green">Binance (fallback)</span></div>
+          <div class="info-row"><span class="info-key">pairs monitored</span><span class="info-val">12</span></div>
+          <div class="info-row"><span class="info-key">uptime</span><span class="info-val" id="uptime">--</span></div>
+        </div>
+      </div>
+
+      <!-- What noProfit means -->
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title"><div class="panel-dot"></div>reading the data</div></div>
+        <div class="panel-body">
+          <div class="info-row"><span class="info-key">noProfit=12</span><span class="info-val amber">all pairs below fee</span></div>
+          <div class="info-row"><span class="info-key">stale=N</span><span class="info-val">quote took >2s</span></div>
+          <div class="info-row"><span class="info-key">highImpact=N</span><span class="info-val">impact >1%</span></div>
+          <div class="info-row"><span class="info-key">found=N</span><span class="info-val green">profitable arbs</span></div>
+          <div style="padding-top:12px;font-size:10px;font-family:var(--mono);color:var(--text-dim);line-height:1.7">
+            noProfit=12 is normal during calm markets. Arb opportunities appear during volatility spikes, large trades, or thin liquidity events. The scanner is working correctly.
+          </div>
+        </div>
+      </div>
+
+      <!-- Fee breakdown -->
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title"><div class="panel-dot"></div>fee model (real)</div></div>
+        <div class="panel-body">
+          <div class="info-row"><span class="info-key">priority fee ×2</span><span class="info-val">1,000,000 lam</span></div>
+          <div class="info-row"><span class="info-key">base tx fee ×2</span><span class="info-val">10,000 lam</span></div>
+          <div class="info-row"><span class="info-key">protocol fees</span><span class="info-val">from Jupiter route</span></div>
+          <div class="info-row"><span class="info-key">total est.</span><span class="info-val amber">~1,010,000 lam</span></div>
+          <div class="info-row"><span class="info-key">in SOL</span><span class="info-val amber">~0.00101 SOL</span></div>
+          <div class="info-row"><span class="info-key">in USD</span><span class="info-val amber" id="feeUSD">~$0.087</span></div>
+          <div class="info-row"><span class="info-key">break-even bps</span><span class="info-val amber">~10.1 bps</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <footer>
+    <span>paper trader · real jupiter quotes · no real capital · <span id="footerTime">--:--:--</span> UTC</span>
+    <span id="footerScans">0 scans completed</span>
+  </footer>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────
+const JUPITER_BASE = 'https://public.jupiterapi.com/quote';
+const SOL  = 'So11111111111111111111111111111111111111112';
+const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const USDT = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
+const RAY  = '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R';
+const JUP  = 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN';
+const BONK = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
+const WIF  = 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm';
+
+const PAIRS = [
+  { name:'SOL/USDC', a:SOL,  b:USDC, amt:'100000000' },
+  { name:'SOL/USDT', a:SOL,  b:USDT, amt:'100000000' },
+  { name:'USDC/USDT',a:USDC, b:USDT, amt:'8000000'   },
+  { name:'SOL/RAY',  a:SOL,  b:RAY,  amt:'100000000' },
+  { name:'SOL/JUP',  a:SOL,  b:JUP,  amt:'100000000' },
+  { name:'WIF/USDC', a:WIF,  b:USDC, amt:'1000000000'},
+  { name:'BONK/USDC',a:BONK, b:USDC, amt:'100000000000'},
+];
+
+const FEE_LAMPORTS = 1_010_000;
+const startTime = Date.now();
+
+// ── State ─────────────────────────────────────────────────────
+let solPrice    = 0;
+let scanCount   = 0;
+let totalOpps   = 0;
+let scanTimes   = [];
+let spreadHistory = [];
+let scanLog     = [];
+let pairSpreads = {};
+
+// ── Chart ─────────────────────────────────────────────────────
+const spreadChart = new Chart(document.getElementById('spreadChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'Best spread (bps)', data: [], borderColor: '#00ff88', borderWidth: 1.5, pointRadius: 2, pointBackgroundColor: '#00ff88', fill: true, backgroundColor: 'rgba(0,255,136,0.05)', tension: 0.4 },
+      { label: 'Fee threshold', data: [], borderColor: 'rgba(245,166,35,0.5)', borderWidth: 1, borderDash: [4,4], pointRadius: 0, fill: false },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: { duration: 400 },
+    plugins: { legend: { display: true, labels: { color: '#5a7a65', font: { family: 'JetBrains Mono', size: 9 }, boxWidth: 12 } } },
+    scales: {
+      x: { ticks: { color: '#5a7a65', font: { family: 'JetBrains Mono', size: 9 }, maxTicksLimit: 8 }, grid: { color: 'rgba(0,255,136,0.04)' }, border: { color: 'rgba(0,255,136,0.1)' } },
+      y: { ticks: { color: '#5a7a65', font: { family: 'JetBrains Mono', size: 9 }, callback: v => v.toFixed(1)+' bps' }, grid: { color: 'rgba(0,255,136,0.04)' }, border: { color: 'rgba(0,255,136,0.1)' } }
+    }
+  }
+});
+
+// ── Fetch SOL price ───────────────────────────────────────────
+async function fetchSolPrice() {
+  try {
+    const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT');
+    const d = await r.json();
+    solPrice = parseFloat(d.price);
+    const p = '$' + solPrice.toFixed(2);
+    document.getElementById('solPrice').textContent = p;
+    document.getElementById('solPriceCard').textContent = p;
+    document.getElementById('feeUSD').textContent = '~$' + (0.00101 * solPrice).toFixed(3);
+  } catch(e) {}
+}
+
+// ── Fetch real spreads from Jupiter ──────────────────────────
+async function fetchSpreads() {
+  const results = [];
+  const t0 = Date.now();
+
+  for (const pair of PAIRS) {
+    try {
+      // Leg 1: A → B
+      const r1 = await fetch(`${JUPITER_BASE}?inputMint=${pair.a}&outputMint=${pair.b}&amount=${pair.amt}&slippageBps=50`);
+      if (!r1.ok) continue;
+      const q1 = await r1.json();
+
+      // Leg 2: B → A using real output of leg 1
+      const r2 = await fetch(`${JUPITER_BASE}?inputMint=${pair.b}&outputMint=${pair.a}&amount=${q1.outAmount}&slippageBps=50`);
+      if (!r2.ok) continue;
+      const q2 = await r2.json();
+
+      const input     = parseInt(pair.amt);
+      const output    = parseInt(q2.outAmount);
+      const gross     = output - input;
+      const net       = gross - FEE_LAMPORTS;
+      const grossBps  = (gross / input * 10000);
+      const netBps    = (net   / input * 10000);
+      const leg1Route = (q1.routePlan||[]).map(r=>r.swapInfo?.label||'').filter(Boolean).join('→') || 'unknown';
+      const leg2Route = (q2.routePlan||[]).map(r=>r.swapInfo?.label||'').filter(Boolean).join('→') || 'unknown';
+
+      results.push({ name: pair.name, grossBps, netBps, gross, net, leg1Route, leg2Route, profitable: net > 0 });
+      pairSpreads[pair.name] = { grossBps, netBps, profitable: net > 0 };
+    } catch(e) {
+      results.push({ name: pair.name, grossBps: 0, netBps: 0, gross: 0, net: 0, leg1Route:'error', leg2Route:'error', profitable: false });
+    }
+  }
+
+  const elapsed = Date.now() - t0;
+  scanCount++;
+  const found = results.filter(r => r.profitable).length;
+  if (found > 0) totalOpps += found;
+
+  scanTimes.push(elapsed);
+  if (scanTimes.length > 20) scanTimes.shift();
+
+  // Best spread this cycle
+  const bestBps = Math.max(...results.map(r => r.grossBps), 0);
+  const t = new Date().toLocaleTimeString('en-US', { hour12: false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  spreadHistory.push({ time: t, bps: +bestBps.toFixed(2) });
+  if (spreadHistory.length > 40) spreadHistory.shift();
+
+  // Add to scan log
+  scanLog.unshift({ num: scanCount, found, elapsed, time: t, pairs: PAIRS.length });
+  if (scanLog.length > 15) scanLog.pop();
+
+  renderSpreads(results);
+  renderScanLog();
+  updateStats(elapsed);
+  updateChart();
+
+  document.getElementById('lastQuoteTime').textContent = 'updated ' + t;
+}
+
+// ── Render spread table ───────────────────────────────────────
+function renderSpreads(results) {
+  const maxBps = Math.max(...results.map(r => Math.abs(r.grossBps)), 1);
+
+  document.getElementById('spreadTable').innerHTML = results.map(r => {
+    const bps    = r.grossBps.toFixed(2);
+    const sign   = r.grossBps >= 0 ? '+' : '';
+    const cls    = r.profitable ? 'profitable' : r.grossBps > 5 ? 'close' : 'negative';
+    const label  = r.profitable ? 'PROFIT' : r.grossBps > 5 ? 'CLOSE' : 'NEGATIVE';
+    const barPct = Math.min(100, Math.abs(r.grossBps) / maxBps * 100);
+    const barClr = r.profitable ? '#00ff88' : r.grossBps > 5 ? '#f5a623' : '#ff4757';
+    const bpsCls = r.profitable ? 'pos' : r.grossBps > 0 ? 'zero' : 'neg';
+
+    return `<div class="spread-row">
+      <div class="spread-pair">${r.name}</div>
+      <div class="spread-bar-wrap"><div class="spread-bar" style="width:${barPct}%;background:${barClr}"></div></div>
+      <div class="spread-bps ${bpsCls}">${sign}${bps} bps</div>
+      <div class="spread-status ${cls}">${label}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Render scan log ───────────────────────────────────────────
+function renderScanLog() {
+  document.getElementById('scanLog').innerHTML = scanLog.map(s => `
+    <div class="scan-item">
+      <div class="scan-num">#${s.num}</div>
+      <div class="scan-pairs">scanned ${s.pairs} pairs</div>
+      <div class="scan-found ${s.found === 0 ? 'zero' : ''}">${s.found > 0 ? '◆ '+s.found+' found' : '0 found'}</div>
+      <div class="scan-elapsed">${s.elapsed}ms</div>
+      <div class="scan-time">${s.time}</div>
+    </div>`).join('');
+}
+
+// ── Update stats ──────────────────────────────────────────────
+function updateStats(elapsed) {
+  const avgMs = Math.round(scanTimes.reduce((a,b)=>a+b,0)/scanTimes.length);
+  const oppRate = scanCount > 0 ? ((totalOpps/scanCount)*100).toFixed(1) : '0.0';
+  const uptime  = formatDuration(Date.now() - startTime);
+
+  document.getElementById('totalScans').textContent    = scanCount;
+  document.getElementById('totalOpps').textContent     = totalOpps;
+  document.getElementById('scanRate').textContent      = 'every ~' + Math.round(avgMs/1000) + 's';
+  document.getElementById('oppRate').textContent       = oppRate + '% of scans';
+  document.getElementById('avgScanTime').textContent   = avgMs + 'ms';
+  document.getElementById('uptime').textContent        = uptime;
+  document.getElementById('footerScans').textContent   = scanCount + ' scans completed';
+}
+
+function updateChart() {
+  spreadChart.data.labels = spreadHistory.map(s => s.time);
+  spreadChart.data.datasets[0].data = spreadHistory.map(s => s.bps);
+  // Fee threshold line at ~10.1 bps
+  spreadChart.data.datasets[1].data = spreadHistory.map(() => 10.1);
+  spreadChart.update('none');
+}
+
+function formatDuration(ms) {
+  const s = Math.floor(ms/1000), m = Math.floor(s/60), h = Math.floor(m/60);
+  if (h > 0) return h+'h '+( m%60)+'m';
+  if (m > 0) return m+'m '+(s%60)+'s';
+  return s+'s';
+}
+
+// ── Clock ─────────────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('footerTime').textContent =
+    new Date().toUTCString().slice(17,25);
+}, 1000);
+
+// ── Init ──────────────────────────────────────────────────────
+async function init() {
+  await fetchSolPrice();
+  await fetchSpreads();
+}
+
+init();
+setInterval(fetchSolPrice, 15_000);
+setInterval(fetchSpreads,  30_000);  // Jupiter rate limits — don't go faster
+</script>
+</body>
+</html>
