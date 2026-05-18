@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Challenge League — Leaderboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root{--bg:#080c10;--surface:#0d1218;--surface2:#111820;--surface3:#161f28;--border:rgba(0,255,136,0.12);--border2:rgba(0,255,136,0.06);--green:#00ff88;--green-dim:rgba(0,255,136,0.12);--amber:#f5a623;--red:#ff4757;--blue:#4ecdc4;--purple:#a855f7;--text:#e8f0e9;--text-dim:#5a7a65;--text-mid:#8aab90;--mono:'JetBrains Mono',monospace;--sans:'Space Grotesk',sans-serif}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,136,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+  .container{max-width:1280px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+  header{border-bottom:1px solid var(--border2);padding:14px 0;background:rgba(8,12,16,.95);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100}
+  .header-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  .logo{display:flex;align-items:center;gap:10px}
+  .logo-icon{width:32px;height:32px;background:var(--green-dim);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .logo-text{font-size:14px;font-weight:700}
+  .logo-sub{font-size:10px;color:var(--text-dim);font-family:var(--mono)}
+  .header-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .status-pill{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);border-radius:100px;padding:5px 12px;font-size:11px;font-family:var(--mono);color:var(--green)}
+  .status-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+  body.disconnected .status-dot{background:var(--red);box-shadow:0 0 6px var(--red)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .subtitle{font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-top:2px}
+
+  .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:16px 0 0}
+  .stat-card{background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden}
+  .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--green),transparent);opacity:.4}
+  .stat-label{font-size:9px;font-family:var(--mono);color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
+  .stat-value{font-size:20px;font-weight:700;font-family:var(--mono);line-height:1}
+  .stat-value.gold{color:#ffd700}.stat-value.silver{color:#c0c0c0}.stat-value.bronze{color:#cd7f32}
+  .stat-delta{font-size:9px;font-family:var(--mono);color:var(--text-dim);margin-top:4px}
+
+  .leaderboard{display:flex;flex-direction:column;gap:6px;padding:12px 0}
+  .lb-row{display:grid;grid-template-columns:40px 1fr 100px 80px 80px 80px 100px;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;font-size:11px;font-family:var(--mono);transition:all .2s}
+  .lb-row:hover{border-color:var(--border);background:var(--surface2)}
+  .lb-row.gold{border-color:rgba(255,215,0,.3);background:rgba(255,215,0,.04)}
+  .lb-row.silver{border-color:rgba(192,192,192,.3);background:rgba(192,192,192,.04)}
+  .lb-row.bronze{border-color:rgba(205,127,50,.3);background:rgba(205,127,50,.04)}
+  .lb-rank{font-weight:700;font-size:14px;text-align:center}
+  .lb-rank.gold{color:#ffd700}.lb-rank.silver{color:#c0c0c0}.lb-rank.bronze{color:#cd7f32}
+  .lb-name{font-weight:600;color:var(--text)}
+  .lb-name-desc{font-size:9px;color:var(--text-dim);font-weight:400}
+  .lb-num{text-align:right}
+  .lb-num.pos{color:var(--green)}.lb-num.neg{color:var(--red)}.lb-num.neutral{color:var(--text-dim)}
+  .lb-bar-wrap{background:var(--surface3);border-radius:3px;height:5px;overflow:hidden;width:100%}
+  .lb-bar{height:100%;border-radius:3px;transition:width .6s ease}
+
+  .panel-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 0}
+  @media(max-width:800px){.panel-grid{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--border2);border-radius:10px;overflow:hidden}
+  .panel-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border2)}
+  .panel-title{font-size:10px;font-family:var(--mono);color:var(--text-mid);text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:6px}
+  .panel-dot{width:4px;height:4px;border-radius:50%;background:var(--green)}
+  .panel-body{padding:12px}
+  .chart-wrap{height:160px;position:relative}
+
+  .profile-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;padding:8px 0}
+  .profile-card{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:10px}
+  .profile-name{font-weight:600;color:var(--green);font-size:11px;margin-bottom:4px}
+  .profile-stat{display:flex;justify-content:space-between;color:var(--text-dim);padding:2px 0}
+  .profile-stat span:last-child{color:var(--text)}
+
+  .disclaimer{background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:8px;padding:10px 14px;font-size:10px;font-family:var(--mono);color:var(--amber);margin:10px 0;line-height:1.5}
+  .empty{text-align:center;padding:30px;font-family:var(--mono);font-size:11px;color:var(--text-dim);line-height:1.8}
+  .loading-spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--text-dim);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  footer{border-top:1px solid var(--border2);padding:10px 0;font-family:var(--mono);font-size:9px;color:var(--text-dim);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;position:relative;z-index:1}
+</style>
+</head>
+<body class="disconnected">
+
+<header>
+  <div class="container">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">🏆</div>
+        <div>
+          <div class="logo-text">CHALLENGE LEAGUE</div>
+          <div class="logo-sub">paper trading · multi-strategy · live quotes</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="status-pill"><div class="status-dot"></div><span id="statusText">connecting...</span></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="disclaimer">
+    ⚠ All data from paper trading simulation. No real capital at risk. Strategies compete on identical market data from Jupiter live quotes. Leaderboard refreshes every 10 seconds.
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-label">rounds completed</div><div class="stat-value" id="roundCount">0</div><div class="stat-delta">total scan cycles</div></div>
+    <div class="stat-card"><div class="stat-label">active strategies</div><div class="stat-value" id="activeStrategies">0</div><div class="stat-delta">competing</div></div>
+    <div class="stat-card"><div class="stat-label">leader</div><div class="stat-value gold" id="leaderName">---</div><div class="stat-delta" id="leaderPnL">$0.00</div></div>
+    <div class="stat-card"><div class="stat-label">total trades</div><div class="stat-value" id="totalTrades">0</div><div class="stat-delta">across all strategies</div></div>
+  </div>
+
+  <div id="leaderboardContainer">
+    <div class="empty"><span class="loading-spinner"></span>&nbsp; waiting for data...</div>
+  </div>
+
+  <div class="panel-grid">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title"><div class="panel-dot"></div>PnL comparison</div></div>
+      <div class="panel-body"><div class="chart-wrap"><canvas id="pnlChart"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title"><div class="panel-dot"></div>win rate · sharpe</div></div>
+      <div class="panel-body"><div class="chart-wrap"><canvas id="qualityChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title"><div class="panel-dot"></div>strategy profiles</div></div>
+    <div class="panel-body"><div class="profile-grid" id="profilesContainer"><div class="empty">loading...</div></div></div>
+  </div>
+</div>
+
+<footer>
+  <span>challenge league · paper trading · <span id="footerTime">--:--:--</span></span>
+  <span id="footerStatus">disconnected</span>
+</footer>
+
+<script>
+const API_BASE = 'http://127.0.0.1:3199';
+const POLL_MS = 10000;
+
+let pnlChart = null;
+let qualityChart = null;
+
+// ── Fetch ─────────────────────────────────────────────────────
+async function fetchAPI(path) {
+  try {
+    const r = await fetch(`${API_BASE}${path}`, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch(e) {
+    document.body.classList.add('disconnected');
+    document.getElementById('statusText').textContent = 'offline';
+    document.getElementById('footerStatus').textContent = '⚠ disconnected — is the bot running?';
+    throw e;
+  }
+}
+
+// ── Render leaderboard ────────────────────────────────────────
+function renderBoard(data) {
+  document.body.classList.remove('disconnected');
+  const { leaderboard, stats, roundCount } = data;
+  if (!leaderboard || leaderboard.length === 0) {
+    document.getElementById('leaderboardContainer').innerHTML = '<div class="empty">No trades yet. Strategies are scanning for opportunities...<br>Leaderboard will populate once trades are made.</div>';
+    return;
+  }
+
+  document.getElementById('roundCount').textContent = roundCount ?? 0;
+  document.getElementById('activeStrategies').textContent = leaderboard.length;
+  document.getElementById('leaderName').textContent = leaderboard[0].name;
+  document.getElementById('leaderPnL').textContent = `$${leaderboard[0].totalPnLUSD.toFixed(4)}`;
+
+  const totalTrades = leaderboard.reduce((s, e) => s + e.trades, 0);
+  document.getElementById('totalTrades').textContent = totalTrades;
+
+  const maxPnL = Math.max(...leaderboard.map(e => Math.max(e.totalPnLUSD, 0.0001)), 0.0001);
+  const minPnL = Math.min(...leaderboard.map(e => e.totalPnLUSD), 0);
+
+  document.getElementById('leaderboardContainer').innerHTML = `<div class="leaderboard">${leaderboard.map((e, i) => {
+    const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    const pnlClass = e.totalPnLUSD > 0 ? 'pos' : e.totalPnLUSD < 0 ? 'neg' : 'neutral';
+    const barPct = e.totalPnLUSD >= 0
+      ? Math.max(3, (e.totalPnLUSD / maxPnL) * 100)
+      : Math.max(3, Math.abs(e.totalPnLUSD) / Math.max(Math.abs(minPnL), 0.0001) * 20);
+    const barColor = e.totalPnLUSD >= 0 ? '#00ff88' : '#ff4757';
+
+    return `<div class="lb-row ${rankClass}">
+      <div class="lb-rank ${rankClass}">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${e.rank}`}</div>
+      <div class="lb-name">${e.name}<div class="lb-name-desc">${e.trades} trades · ${e.winRate}% win</div></div>
+      <div class="lb-num ${pnlClass}">${e.totalPnLUSD >= 0 ? '+' : ''}$${e.totalPnLUSD.toFixed(4)}</div>
+      <div class="lb-num">${e.sharpe.toFixed(2)}</div>
+      <div class="lb-num neutral">${e.profitFactor.toFixed(1)}x</div>
+      <div class="lb-num neutral">${e.virtualBalanceSOL.toFixed(4)}</div>
+      <div class="lb-bar-wrap"><div class="lb-bar" style="width:${barPct}%;background:${barColor}"></div></div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ── Charts ────────────────────────────────────────────────────
+function updateCharts(leaderboard) {
+  if (!pnlChart) {
+    pnlChart = new Chart(document.getElementById('pnlChart').getContext('2d'), {
+      type: 'bar',
+      data: { labels: [], datasets: [{
+        label: 'PnL (USD)',
+        data: [],
+        backgroundColor: [],
+        borderColor: [],
+        borderWidth: 1,
+        borderRadius: 4,
+      }]},
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 400 },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#5a7a65', font: { family: 'JetBrains Mono', size: 9 } }, grid: { display: false } },
+          y: { ticks: { color: '#5a7a65', font: { family: 'JetBrains Mono', size: 9 }, callback: v => '$'+v.toFixed(2) }, grid: { color: 'rgba(0,255,136,0.04)' } }
+        }
+      }
+    });
+  }
+
+  const labels = leaderboard.map(e => e.name.slice(0, 10));
+  const values = leaderboard.map(e => e.totalPnLUSD);
+  const colors = values.map(v => v >= 0 ? 'rgba(0,255,136,0.7)' : 'rgba(255,71,87,0.7)');
+  const borders = values.map(v => v >= 0 ? '#00ff88' : '#ff4757');
+
+  pnlChart.data.labels = labels;
+  pnlChart.data.datasets[0].data = values;
+  pnlChart.data.datasets[0].backgroundColor = colors;
+  pnlChart.data.datasets[0].borderColor = borders;
+  pnlChart.update('none');
+
+  // Quality chart
+  if (!qualityChart) {
+    qualityChart = new Chart(document.getElementById('qualityChart').getContext('2d'), {
+      type: 'radar',
+      data: { labels: [], datasets: [] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 400 },
+        plugins: { legend: { labels: { color: '#5a7a65', font: { family: 'JetBrains Mono', size: 8 }, boxWidth: 10 } } },
+        scales: {
+          r: {
+            ticks: { color: '#5a7a65', font: { family: 'JetBrains Mono', size: 8 }, backdropColor: 'transparent' },
+            grid: { color: 'rgba(0,255,136,0.06)' },
+            angleLines: { color: 'rgba(0,255,136,0.06)' },
+            pointLabels: { color: '#8aab90', font: { family: 'JetBrains Mono', size: 9 } }
+          }
+        }
+      }
+    });
+  }
+
+  const maxWinRate = Math.max(...leaderboard.map(e => e.winRate), 1);
+  const maxSharpe = Math.max(...leaderboard.map(e => Math.abs(e.sharpe)), 0.1);
+  const maxPF = Math.max(...leaderboard.map(e => Math.min(e.profitFactor, 10)), 1);
+
+  const colors2 = ['#00ff88', '#4ecdc4', '#f5a623', '#a855f7', '#ff4757', '#ffd700'];
+
+  qualityChart.data.labels = ['Win Rate', 'Sharpe', 'Profit Factor'];
+  qualityChart.data.datasets = leaderboard.map((e, i) => ({
+    label: e.name,
+    data: [
+      (e.winRate / maxWinRate) * 100,
+      (Math.abs(e.sharpe) / maxSharpe) * 100,
+      (Math.min(e.profitFactor, 10) / maxPF) * 100,
+    ],
+    borderColor: colors2[i % colors2.length],
+    backgroundColor: colors2[i % colors2.length] + '15',
+    pointBackgroundColor: colors2[i % colors2.length],
+    borderWidth: 1.5,
+    pointRadius: 3,
+  }));
+  qualityChart.update('none');
+}
+
+// ── Render profiles ───────────────────────────────────────────
+function renderProfiles(profiles) {
+  document.getElementById('profilesContainer').innerHTML = profiles.filter(p => p.enabled).map(p => `
+    <div class="profile-card">
+      <div class="profile-name">${p.name}</div>
+      <div class="profile-stat"><span>max trade</span><span>${p.maxTradeSol} SOL</span></div>
+      <div class="profile-stat"><span>min profit</span><span>$${p.minProfitUSD.toFixed(2)}</span></div>
+      <div class="profile-stat"><span>slippage</span><span>${p.slippageBps} bps</span></div>
+      <div class="profile-stat"><span>concurrency</span><span>${p.maxConcurrentTrades}</span></div>
+      <div class="profile-stat"><span>confidence</span><span>${p.confidenceFilter}</span></div>
+      <div class="profile-stat"><span>pairs</span><span>${p.pairFilter}</span></div>
+    </div>
+  `).join('');
+}
+
+// ── Poll loop ─────────────────────────────────────────────────
+async function poll() {
+  try {
+    const boardData = await fetchAPI('/api/leaderboard');
+    renderBoard(boardData);
+
+    if (boardData.leaderboard && boardData.leaderboard.length > 0) {
+      updateCharts(boardData.leaderboard);
+    }
+
+    document.getElementById('statusText').textContent = `live · ${boardData.roundCount} rounds`;
+    document.getElementById('footerStatus').textContent = `updated ${new Date().toLocaleTimeString()}`;
+
+    const profilesData = await fetchAPI('/api/profiles');
+    if (profilesData.profiles) renderProfiles(profilesData.profiles);
+  } catch {
+    // already handled in fetchAPI
+  }
+}
+
+setInterval(() => {
+  document.getElementById('footerTime').textContent = new Date().toUTCString().slice(17, 25);
+}, 1000);
+
+poll();
+setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>
